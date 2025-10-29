@@ -1,4 +1,4 @@
-#define softVer 10.0
+#define softVer 10.1
 //2024NOV removed CANEnabled
 
 #define VolControlType 0 //0-SPI MCP42050
@@ -44,7 +44,7 @@
 #endif
 
 #if additionalVolControl == 2 //CAN
-  #define lvlStep 0x04
+  #define lvlStep 0x01
   #define maxDispLevel 99
   #define maxDispLevelToDigiPotRatio 2.576 // 255/maxDispLevel 2.576(for 0-99)
   #define volBarWidthToMaxVolRatio 1
@@ -633,11 +633,11 @@ void loop(){
           #if canVolControlBy == 1 // 0 -by vol status from HU, 1 -by wheel button
             if (canId == canidWheelButton) { //wheelbuttons
               //DEBUG++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-              display.setCursor(0, 55);
-              display.fillRect(0, 55, 18, 7, BLACK);
-              display.print("#");
-              display.print(buf[4],HEX);
-              display.display(); 
+              //display.setCursor(0, 55);
+              //display.fillRect(0, 55, 18, 7, BLACK);
+              //display.print("#");
+              //display.print(buf[4],HEX);
+              //display.display(); 
               //DEBUG++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
                 #if defCanVolControlByCarModel == 1 //1- MB C-class 2007-2015(204)
                   if (buf[4] == 0x10) { //vol+
@@ -647,7 +647,8 @@ void loop(){
                     lvlTemp = -1;
                   }
                   //lvlTemp = lvlTemp*lvlStep;
-                  lvlVol = checkVolLevel(lvlVol + lvlTemp);
+                  //lvlVol = checkVolLevel(lvlVol + lvlTemp);
+                  lvlVol = checkVolLevel(lvlVol + (lvlTemp*ProgressiveVolStep(lvlVol)));
                 #endif
             }
           #endif
@@ -683,11 +684,14 @@ void loop(){
       }
       timeMenuEnabled = timeCurrent;
     } else {
-      lvlTemp = lvlTemp*lvlStep;
+      //lvlTemp = lvlTemp*lvlStep;
+      //lvlTemp = lvlTemp*ProgressiveVolStep(lvlTemp);
       if (blnSub) {
-        lvlSub = checkVolLevel(lvlSub + lvlTemp);
+        //lvlSub = checkVolLevel(lvlSub + lvlTemp);
+        lvlSub = checkVolLevel(lvlSub + (lvlTemp*ProgressiveVolStep(lvlSub)));
       } else {
-        lvlVol = checkVolLevel(lvlVol + lvlTemp);
+        //lvlVol = checkVolLevel(lvlVol + lvlTemp);
+        lvlVol = checkVolLevel(lvlVol + (lvlTemp*ProgressiveVolStep(lvlVol)));
       }
     }
   }
@@ -726,9 +730,16 @@ byte checkValueMinMax(int val, int min, int max) {
 byte checkVolLevel(int lvl) {
       if (lvl < minDispLevel) return minDispLevel;
       if (lvl > maxDispLevel) return maxDispLevel;
-      if (lvl > 94) return 96;      
+      //if (lvl > 94) return 96;      
       return lvl;
 }
+
+byte ProgressiveVolStep(int lvl) {
+      if (lvl < 60) return 4;
+      if (lvl < 90) return 2;
+      return 1;
+}
+
 
 #if additionalVolControl == 2 // External Vol Control By: 0-none, 1-UART, 2-CAN//#if CANEnabled == 1
   byte splitDigitAny(unsigned int lvl, byte pos) {
