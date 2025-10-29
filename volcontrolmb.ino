@@ -8,6 +8,7 @@
 #if additionalVolControl == 2 
   #define canVolControlBy 1 //1 -by wheel button
   #define defCanVolControlByCarModel 1 //1- MB C-class 2007-2015(204) CAN-A wires under left kick panel CAN-H Brown-Red, CAN-L Brown; 2-BMW
+  #define defProgressiveLvlStep 1 //0- lvlStep constant used, 1 - ProgressiveVolStep used <60 - 4 steps, <90 - 2, >90 -1
 #endif
 
 #include <EEPROM.h>
@@ -44,7 +45,7 @@
 #endif
 
 #if additionalVolControl == 2 //CAN
-  #define lvlStep 0x01
+  #define lvlStep 0x04
   #define maxDispLevel 99
   #define maxDispLevelToDigiPotRatio 2.576 // 255/maxDispLevel 2.576(for 0-99)
   #define volBarWidthToMaxVolRatio 1
@@ -646,9 +647,11 @@ void loop(){
                   if (buf[4] == 0x20) { //vol-
                     lvlTemp = -1;
                   }
-                  //lvlTemp = lvlTemp*lvlStep;
-                  //lvlVol = checkVolLevel(lvlVol + lvlTemp);
-                  lvlVol = checkVolLevel(lvlVol + (lvlTemp*ProgressiveVolStep(lvlVol)));
+                  #if defProgressiveLvlStep == 0 //0- lvlStep constant used, 1 - ProgressiveVolStep used <60 - 4 steps, <90 - 2, >90 -1
+                    lvlVol = checkVolLevel(lvlVol + (lvlTemp*lvlStep));
+                  #else
+                    lvlVol = checkVolLevel(lvlVol + (lvlTemp*ProgressiveVolStep(lvlVol)));
+                  #endif
                 #endif
             }
           #endif
@@ -684,14 +687,19 @@ void loop(){
       }
       timeMenuEnabled = timeCurrent;
     } else {
-      //lvlTemp = lvlTemp*lvlStep;
-      //lvlTemp = lvlTemp*ProgressiveVolStep(lvlTemp);
       if (blnSub) {
-        //lvlSub = checkVolLevel(lvlSub + lvlTemp);
-        lvlSub = checkVolLevel(lvlSub + (lvlTemp*ProgressiveVolStep(lvlSub)));
+        #if defProgressiveLvlStep == 0 //0- lvlStep constant used, 1 - ProgressiveVolStep used <60 - 4 steps, <90 - 2, >90 -1
+          lvlSub = checkVolLevel(lvlSub + (lvlTemp*lvlStep));
+        #else
+          lvlSub = checkVolLevel(lvlSub + (lvlTemp*ProgressiveVolStep(lvlSub)));
+        #endif
+
       } else {
-        //lvlVol = checkVolLevel(lvlVol + lvlTemp);
-        lvlVol = checkVolLevel(lvlVol + (lvlTemp*ProgressiveVolStep(lvlVol)));
+        #if defProgressiveLvlStep == 0 //0- lvlStep constant used, 1 - ProgressiveVolStep used <60 - 4 steps, <90 - 2, >90 -1
+          lvlVol = checkVolLevel(lvlVol + (lvlTemp*lvlStep));
+        #else
+          lvlVol = checkVolLevel(lvlVol + (lvlTemp*ProgressiveVolStep(lvlVol)));
+        #endif
       }
     }
   }
@@ -734,12 +742,13 @@ byte checkVolLevel(int lvl) {
       return lvl;
 }
 
-byte ProgressiveVolStep(int lvl) {
-      if (lvl < 60) return 4;
-      if (lvl < 90) return 2;
-      return 1;
-}
-
+#if defProgressiveLvlStep == 1 //0- lvlStep constant used, 1 - ProgressiveVolStep used <60 - 4 steps, <90 - 2, >90 -1
+  byte ProgressiveVolStep(int lvl) {
+    if (lvl < 60) return 4;
+    if (lvl < 90) return 2;
+    return 1;
+  }
+#endif
 
 #if additionalVolControl == 2 // External Vol Control By: 0-none, 1-UART, 2-CAN//#if CANEnabled == 1
   byte splitDigitAny(unsigned int lvl, byte pos) {
