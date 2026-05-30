@@ -1,5 +1,6 @@
 #define softVer 10.1
 //2024NOV removed CANEnabled
+//2026MAY changing encoder type
 
 #define VolControlType 0 //0-SPI MCP42050
 #define DisplayType 1 //0-OLED 128x32 b&w, 1-OLED 128x64 b&w ,2-4 digit TM
