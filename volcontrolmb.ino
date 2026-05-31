@@ -1,6 +1,6 @@
-#define softVer 10.1
+#define softVer 11.0
 //2024NOV removed CANEnabled
-//2026MAY changing encoder type
+//2026MAY changing encoder type https://github.com/M-Reimer/EncoderStepCounter
 
 #define VolControlType 0 //0-SPI MCP42050
 #define DisplayType 1 //0-OLED 128x32 b&w, 1-OLED 128x64 b&w ,2-4 digit TM
@@ -11,6 +11,7 @@
   #define defCanVolControlByCarModel 1 //1- MB C-class 2007-2015(204) CAN-A wires under left kick panel CAN-H Brown-Red, CAN-L Brown; 2-BMW
   #define defProgressiveLvlStep 1 //0- lvlStep constant used, 1 - ProgressiveVolStep used <60 - 4 steps, <90 - 2, >90 -1
 #endif
+#define defEncoderType 1 //0- EC11, 1- KY-040
 
 #include <EEPROM.h>
 //GLOBAL PIN DEFINITION
@@ -164,19 +165,29 @@ volatile byte bFlag = 0;
 volatile byte encoderPos = 0x80;
 volatile byte reading = 0;
 bool blnEncoderCCWRotation = false;
+#if defEncoderType == 0 //EC11
+  void PinA(){
+    cli();
+    reading = PIND & 0xC;
+    if(reading == B00001100 && aFlag) { encoderPos --; bFlag = 0; aFlag = 0;} else if (reading == B00000100) bFlag = 1;
+    sei();
+  }
+  void PinB(){
+    cli();
+    reading = PIND & 0xC;
+    if (reading == B00001100 && bFlag) { encoderPos ++; bFlag = 0; aFlag = 0;} else if (reading == B00001000) aFlag = 1;
+    sei();
+  }
+#else //KY-040
+  #include "EncoderStepCounter.h"
+  #define ENCODER_INT1 digitalPinToInterrupt(pinEncA)
+  #define ENCODER_INT2 digitalPinToInterrupt(pinEncB)
+  EncoderStepCounter encoder(pinEncA, pinEncB, HALF_STEP);
 
-void PinA(){
-  cli();
-  reading = PIND & 0xC;
-  if(reading == B00001100 && aFlag) { encoderPos --; bFlag = 0; aFlag = 0;} else if (reading == B00000100) bFlag = 1;
-  sei();
-}
-void PinB(){
-  cli();
-  reading = PIND & 0xC;
-  if (reading == B00001100 && bFlag) { encoderPos ++; bFlag = 0; aFlag = 0;} else if (reading == B00001000) aFlag = 1;
-  sei();
-}
+  void interrupt() {
+    encoder.tick();
+  }
+#endif
 
 volatile byte lvlVol = 0; //start volume level
 volatile byte lvlSub = 0; //start volume level
@@ -217,10 +228,17 @@ void setup() {
       pinMode(pinSPIDigPotCS, OUTPUT);
       pinMode(pinDigitalSwOut, OUTPUT);
   #endif
-
-  pinMode(pinEncA, INPUT_PULLUP); 
-  pinMode(pinEncB, INPUT_PULLUP); 
-  pinMode(pinEncButton, INPUT_PULLUP);
+  #if defEncoderType == 0 //EC11
+    pinMode(pinEncA, INPUT_PULLUP); 
+    pinMode(pinEncB, INPUT_PULLUP); 
+    pinMode(pinEncButton, INPUT_PULLUP);
+    attachInterrupt(0,PinA,RISING);
+    attachInterrupt(1,PinB,RISING);
+  #else //KY-040
+    encoder.begin();
+    attachInterrupt(ENCODER_INT1, interrupt, CHANGE);
+    attachInterrupt(ENCODER_INT2, interrupt, CHANGE);
+  #endif
 
   blnSub = EEPROM.read(eepromAddrblnSub);
   lvlSub = checkVolLevel(EEPROM.read(eepromAddrlvlSub));
@@ -244,8 +262,6 @@ void setup() {
   #if VolControlType == 0      //Helix SPI MCP
     digitalWrite(pinDigitalSwOut, blnSwitch);
   #endif
-  attachInterrupt(0,PinA,RISING);
-  attachInterrupt(1,PinB,RISING);
   
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) { 
     Serial.println(F("oled fail")); //1160bytes for local variables is not enough for SSD to init. 1226-ok
@@ -658,6 +674,14 @@ void loop(){
           #endif
         }
       }
+    }
+  #endif
+
+  #if defEncoderType == 1 //KY-040
+    signed char pos = encoder.getPosition();
+    if (pos != 0) {
+      encoderPos += pos;
+      encoder.reset();
     }
   #endif
 
