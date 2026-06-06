@@ -228,10 +228,10 @@ void setup() {
       pinMode(pinSPIDigPotCS, OUTPUT);
       pinMode(pinDigitalSwOut, OUTPUT);
   #endif
+  pinMode(pinEncButton, INPUT_PULLUP);
   #if defEncoderType == 0 //EC11
     pinMode(pinEncA, INPUT_PULLUP); 
     pinMode(pinEncB, INPUT_PULLUP); 
-    pinMode(pinEncButton, INPUT_PULLUP);
     attachInterrupt(0,PinA,RISING);
     attachInterrupt(1,PinB,RISING);
   #else //KY-040
