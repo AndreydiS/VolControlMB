@@ -1,10 +1,10 @@
-#define softVer 11.0
+#define softVer 11.1
 //2024NOV removed CANEnabled
-//2026MAY changing encoder type https://github.com/M-Reimer/EncoderStepCounter
+//2026MAY changing encoder type https://github.com/M-Reimer/EncoderStepCounter + adding 1.3" sh110x display
 
 #define VolControlType 0 //0-SPI MCP42050
-#define DisplayType 1 //0-OLED 128x32 b&w, 1-OLED 128x64 b&w ,2-4 digit TM
-#define LDRenabled 1 // 1-Light Detector Connected 0 - not connected
+#define DisplayType 2 //0-128x32 b&w, 1-128x64 ssd1306 .96" , 2-128x64 sh1106 1.3" (1437 bytes for local variables required) 3-4 digit TM,    1172 too low
+#define LDRenabled 0 // 1-Light Detector Connected 0 - not connected
 #define additionalVolControl 2 //2-CAN
 #if additionalVolControl == 2 
   #define canVolControlBy 1 //1 -by wheel button
@@ -59,10 +59,15 @@
 
 #define minDispLevel 0
 
-#if DisplayType < 2 //0-OLED 128x32 b&w, 1-OLED 128x64 b&w
+#if DisplayType < 3 //0-128x32 b&w, 1-128x64 ssd1306 .96" , 2-128x64 sh1106 1.3" 3-4 digit TM
   #include <Wire.h>
   #include <Adafruit_GFX.h>
-  #include <Adafruit_SSD1306.h> 
+  #if DisplayType == 2 //128x64 sh1106 1.3"
+    #include <Adafruit_SH110X.h>
+  #else                // ssd1306 .96"
+    #include <Adafruit_SSD1306.h> 
+  #endif
+  
   #define posVolBigDigX 0
   #define posVolBigDigY 0
   #define posSubBigDigY 0
@@ -99,7 +104,14 @@
   // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
   #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
   #define SCREEN_ADDRESS 0x3C
-  Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+  #if DisplayType == 2 //128x64 1.3" sh1106
+    Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+    #define INVERSE 2
+    #define WHITE 1
+    #define BLACK 0
+  #else
+    Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+  #endif
 #endif
 
 #if LDRenabled
@@ -138,7 +150,7 @@ byte bytDisplayBri = 2;
 //int blnTMBrightness = false;
 bool blnMenuButton = false;
 
-#if DisplayType < 2 //OLEDRenabled
+#if DisplayType < 3 //OLEDRenabled
   //char menuOledDigIn[] = "Digital In";
   char menuOledBri[10] = "Disp. bri";                   
   char menuOledVolBarType[13] = "Vol Bar Type";
@@ -153,8 +165,10 @@ bool blnMenuButton = false;
     #define MenuOledItems 3
   #endif
   
-  #if LDRenabled
+  #if LDRenabled == 1
     #define MenuOledSubBriItems 3 //"Hi" "Mid" "Low" "Auto"
+  #else
+    #define MenuOledSubBriItems 2 //"Hi" "Mid" "Low"
   #endif
   #define MenuOledSubVolBarTypeItems 2 //"Bar1" "Bar2" "Dig"
   #define MenuOledSubVolBy 1 //"Ext" "Enc"
@@ -263,9 +277,13 @@ void setup() {
     digitalWrite(pinDigitalSwOut, blnSwitch);
   #endif
   
-  if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) { 
-    Serial.println(F("oled fail")); //1160bytes for local variables is not enough for SSD to init. 1226-ok
-  }
+  #if DisplayType == 2 //128x64 sh1106 1.3"
+    //delay(250); // wait for the OLED to power up
+    display.begin(SCREEN_ADDRESS, true);
+  #else
+    display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS);
+  #endif
+
   setOledBri(bytDisplayBri);
   display.clearDisplay();
   display.setCursor(0, 0);
@@ -735,23 +753,33 @@ void setOledBri(byte dimLevel) {
   byte dimPrecharge = 0xF1;
 
   switch (dimLevel) {
-    case 0: //Hi
-      //display.dimLevel2(oledMaxBri);
-    break;
     case 1://Mid
-      //display.dimLevel2(oledMidBri);
-      dimContrast = 0x01;
+      #if DisplayType == 2 //128x64 sh1106 1.3"
+        dimContrast = 0x80;
+      #else
+        dimContrast = 0x01;
+      #endif
     break;
     case 2://Low
-      //display.dimLevel2(oledMinBri);
+      #if DisplayType == 2 //128x64 sh1106 1.3"
+        dimPrecharge = 0x01;
+      #else
+        dimPrecharge = 0x20;//0x10;
+      #endif
       dimContrast = 0x01;
-      dimPrecharge = 0x10;
     break;
   }
-  display.ssd1306_command(SSD1306_SETCONTRAST);
-  display.ssd1306_command(dimContrast);
-  display.ssd1306_command(SSD1306_SETPRECHARGE);
-  display.ssd1306_command(dimPrecharge);
+  #if DisplayType == 2 //128x64 sh1106 1.3"
+    display.oled_command(SH110X_SETCONTRAST);
+    display.oled_command(dimContrast);
+    display.oled_command(SH110X_SETPRECHARGE);
+    display.oled_command(dimPrecharge);
+  #else
+    display.ssd1306_command(SSD1306_SETCONTRAST);//0x81
+    display.ssd1306_command(dimContrast);
+    display.ssd1306_command(SSD1306_SETPRECHARGE);//0xD9
+    display.ssd1306_command(dimPrecharge);
+  #endif
 }
 
 byte checkValueMinMax(int val, int min, int max) {
